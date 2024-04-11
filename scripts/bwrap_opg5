@@ -13,7 +13,7 @@
 
 # the base directory for virtual home, tmp, log
 # can be overridden via env BROADWAY_BASEDIR
-BROADWAY_BASEDIR="${BROADWAY_BASEDIR:-/home/broadwayd}"
+BROADWAY_BASEDIR="${BROADWAY_BASEDIR:-/home/casyweb/virt}"
 
 # environment within bwrap
 G_MESSAGES_DEBUG=
