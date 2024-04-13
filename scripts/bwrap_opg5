@@ -55,7 +55,7 @@ log() {
 }
 
 # Parse script arguments
-OPTS="htvl:p:"
+OPTS="htvl:p:mr:"
 
 usage() {
   echo "Usage: start_opg [-${OPTS}] CONF_KEY [ApplBaseDir]" | tee -a "${LOG_FILE}"
@@ -63,15 +63,20 @@ usage() {
   echo "  -t            run in terminal, experimental" | tee -a "${LOG_FILE}"
   echo "  -v            enable debug output" | tee -a "${LOG_FILE}"
   echo "  -p Profile    enable developer mode [AppDevel|SysDevel]" | tee -a "${LOG_FILE}"
+  echo "  -m            switch to opg_mobile.ini" | tee -a "${LOG_FILE}"
   echo "  -l locale     set LANG (default ${LANG})" | tee -a "${LOG_FILE}"
-  echo ""
-  echo "Environment:"
-  echo "  GDK_BACKEND        required, (${GDK_BACKEND})"
-  echo "  BROADWAY_DISPLAY   required, (${BROADWAY_DISPLAY})"
-  echo "  BROADWAY_USER      required, virtual username (${BROADWAY_USER})"
-  echo "  BROADWAY_BASEDIR   optional, base for virtual users (${BROADWAY_BASEDIR})"
+  echo "  -r folder     mount additional folder (ro)" | tee -a "${LOG_FILE}"
+  echo "" | tee -a "${LOG_FILE}"
+  echo "Environment:" | tee -a "${LOG_FILE}"
+  echo "  GDK_BACKEND        required, (${GDK_BACKEND})" | tee -a "${LOG_FILE}"
+  echo "  BROADWAY_DISPLAY   required, (${BROADWAY_DISPLAY})" | tee -a "${LOG_FILE}"
+  echo "  BROADWAY_USER      required, virtual username (${BROADWAY_USER})" | tee -a "${LOG_FILE}"
+  echo "  BROADWAY_BASEDIR   optional, base for virtual users (${BROADWAY_BASEDIR})" | tee -a "${LOG_FILE}"
   exit 1
 }
+
+# Additional bind list
+BWRAP_ADD_MOUNTS=""
 
 while getopts $opts ":${OPTS}" c
 do
@@ -81,6 +86,10 @@ do
     v) G_MESSAGES_DEBUG=all;;
     l) LANG=${OPTARG};;
     p) APPL_PROFILE="-p ${OPTARG}";;
+    m) USE_MOBILE_INI=Yes;;
+    r) BWRAP_ADD_MOUNTS="${BWRAP_ADD_MOUNTS}
+    --ro-bind-try ${OPTARG} ${OPTARG}"
+    ;;
     \?) log "illegal option -- ${OPTARG}"
     usage;;
     esac
@@ -93,6 +102,10 @@ CONF_KEY="$1"
 # default application settings
 APPL_BASE_DIR="${2:-/home/kommerz}"
 APPL_INI_FILE="${APPL_BASE_DIR}/local/opg"
+
+if [ "${USE_MOBILE_INI}" = "Yes" ]; then
+  APPL_INI_FILE="${APPL_BASE_DIR}/local/opg_mobil"
+fi
 
 #
 ## variables
@@ -161,6 +174,7 @@ echo "BROADWAY_USER_DIR=${BROADWAY_USER_DIR}" >> ${LOG_FILE}
 echo "GDK_BACKEND=${GDK_BACKEND}" >> ${LOG_FILE}
 echo "BROADWAY_DISPLAY=${BROADWAY_DISPLAY}" >> ${LOG_FILE}
 echo "BWRAP_MOUNTS=${BWRAP_MOUNTS}" >> ${LOG_FILE}
+echo "BWRAP_ADD_MOUNTS=${BWRAP_ADD_MOUNTS}" >> ${LOG_FILE}
 echo "" >> ${LOG_FILE}
 echo "Application Environment" >> ${LOG_FILE}
 echo "G_MESSAGES_DEBUG=${G_MESSAGES_DEBUG}" >> ${LOG_FILE}
@@ -226,6 +240,7 @@ exec /usr/bin/bwrap --unshare-user \
   ${BWRAP_MOUNTS} \
   --ro-bind /usr/share /usr/share \
   --bind "${BROADWAY_USER_DIR}" "${BWRAP_USER_HOME}" \
+  ${BWRAP_ADD_MOUNTS} \
   --proc /proc \
   --dev-bind /dev /dev \
   --tmpfs /tmp --tmpfs /run \
