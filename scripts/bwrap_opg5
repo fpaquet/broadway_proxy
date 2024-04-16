@@ -244,6 +244,7 @@ exec /usr/bin/bwrap --unshare-user \
   --proc /proc \
   --dev-bind /dev /dev \
   --tmpfs /tmp --tmpfs /run \
+  --dev-bind-try /run/systemd/journal/dev-log /run/systemd/journal/dev-log \
   --setenv HOME "${BWRAP_USER_HOME}" \
   --chdir "${BWRAP_USER_HOME}" \
   --setenv USER "${BROADWAY_USER}" \
