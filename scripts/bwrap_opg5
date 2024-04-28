@@ -55,10 +55,10 @@ log() {
 }
 
 # Parse script arguments
-OPTS="htvl:p:mr:"
+OPTS="htvl:p:mr:w:"
 
 usage() {
-  echo "Usage: start_opg [-${OPTS}] CONF_KEY [ApplBaseDir]" | tee -a "${LOG_FILE}"
+  echo "Usage: brwap_opg5 [-${OPTS}] CONF_KEY [ApplBaseDir]" | tee -a "${LOG_FILE}"
   echo "  -h            show usage" | tee -a "${LOG_FILE}"
   echo "  -t            run in terminal, experimental" | tee -a "${LOG_FILE}"
   echo "  -v            enable debug output" | tee -a "${LOG_FILE}"
@@ -66,6 +66,7 @@ usage() {
   echo "  -m            switch to opg_mobile.ini" | tee -a "${LOG_FILE}"
   echo "  -l locale     set LANG (default ${LANG})" | tee -a "${LOG_FILE}"
   echo "  -r folder     mount additional folder (ro)" | tee -a "${LOG_FILE}"
+  echo "  -w folder     mount additional folder (rw)" | tee -a "${LOG_FILE}"
   echo "" | tee -a "${LOG_FILE}"
   echo "Environment:" | tee -a "${LOG_FILE}"
   echo "  GDK_BACKEND        required, (${GDK_BACKEND})" | tee -a "${LOG_FILE}"
@@ -89,6 +90,9 @@ do
     m) USE_MOBILE_INI=Yes;;
     r) BWRAP_ADD_MOUNTS="${BWRAP_ADD_MOUNTS}
     --ro-bind-try ${OPTARG} ${OPTARG}"
+    ;;
+    w) BWRAP_ADD_MOUNTS="${BWRAP_ADD_MOUNTS}
+    --bind-try ${OPTARG} ${OPTARG}"
     ;;
     \?) log "illegal option -- ${OPTARG}"
     usage;;
