@@ -54,34 +54,30 @@ my $dbh = DBI->connect(
   , {}    # options hash
 ) || die( DBI->errstr );
 
+sub fetch_simple_config {
+    my $key = shift;
+
+    my $sth = $dbh->prepare(
+        "select value from simple_config where key = '$key'" )
+      || die( DBI->errstr );
+
+    $sth->execute()
+      || die( $sth->errstr );
+
+    my $row = $sth->fetchrow_hashref;
+
+    if ( ! defined $row  ) {
+        die( "Couldn't find '$key' in simple_config!" );
+    }
+    return $row->{value};
+}
+
 # Fetch config db settings
-my ( $proxy_port , $auth_service_port );
 
-my $sth = $dbh->prepare(
-    "select value from simple_config where key = 'proxy_port'" )
-  || die( DBI->errstr );
-
-$sth->execute()
-  || die( $sth->errstr );
-
-if ( my $row = $sth->fetchrow_hashref ) {
-    $proxy_port = $row->{value};
-} else {
-    die( "Couldn't find proxy_port in simple_config!" );
-}
-
-$sth = $dbh->prepare(
-    "select value from simple_config where key = 'auth_service_port'" )
-  || die( DBI->errstr );
-
-$sth->execute()
-  || die( $sth->errstr );
-
-if ( my $row = $sth->fetchrow_hashref ) {
-    $auth_service_port = $row->{value};
-} else {
-    die( "Couldn't find auth_service_port in simple_config!" );
-}
+my $proxy_port = fetch_simple_config('proxy_port');
+my $auth_service_port = fetch_simple_config('auth_service_port');
+my $session_port_first = fetch_simple_config('session_port_first');
+my $session_port_last = fetch_simple_config('session_port_last');
 
 ################################################################
 
@@ -203,29 +199,37 @@ sub new {
     
 }
 
+# check and cleanup duplicate port numbers
 sub find_other_user_with_port {
     my ( $username , $port ) = @_;
 
     print $LOG "Checking other users having port $port (not $username)\n";
 
+    if ( $port < $session_port_first or $port > $session_port_last) {
+        print $LOG "Port outside session_port range $session_port_first - $session_port_last\n";
+        return undef;
+    }
+
     # ensure not stealing other users session
     my $sql = 'select username from users where username != ? and port = ?';
 
-    my $sth = $dbh->prepare( $sql )
-        || print $LOG $dbh->errstr;
-
-    #print $LOG $sth->{Statement} . "\n";
-
-    $sth->execute($username, $port )
-        || print $LOG $sth->errstr . "\n";
-
+    my $sth = $dbh->prepare( $sql ) || print LOG $dbh->errstr;
+    $sth->execute($username, $port ) || print LOG $sth->errstr . "\n";
     my $row = $sth->fetchrow_hashref;
-
     $sth->finish();
 
     if ( $row ) {
         my $other_user = $row->{username};
         print $LOG "Found user $other_user having same port $port as $username\n";
+
+        # clear my own port because it's duplicate
+        my $sql = <<'END_SQL';
+          update users set port = NULL where username = ? and port = ?
+END_SQL
+        my $sth = $dbh->prepare( $sql ) || print LOG $dbh->errstr;
+        $sth->execute($username, $port ) || print LOG $sth->errstr . "\n";
+        $sth->finish();
+
         return $other_user;
     }
 

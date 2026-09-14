@@ -150,11 +150,15 @@ my $session_port_last = fetch_simple_config('session_port_last');
 
     }
 
+    # find next unused port number in [session_port_first..session_port_last]
     sub find_available_port{
-
-        my $available_port = undef;
+        my $auth_key = shift;  # authentication key
 
         # fetch ports, which might be in use
+        my $sql = 'BEGIN TRANSACTION';
+        my $sth = $dbh->prepare( $sql ) || print LOG $dbh->errstr;
+        $sth->execute() || print LOG $sth->errstr . "\n";
+        $sth->finish();
 
         my $sql = <<'END_SQL';
           select distinct port from users
@@ -186,12 +190,29 @@ END_SQL
 
             if ( $sock ) {
                 close $sock;
-                $available_port = $port;
-                last;
-            }
+                my $available_port = $port;
 
+                # We're the master. Update the users table with the port we just grabbed ...
+                $sql = 'update users set port = ? where auth_key = ?';
+                $sth = $dbh->prepare( $sql ) || print LOG $dbh->errstr;
+                $sth->execute( $port , $auth_key ) || print LOG $sth->errstr;
+
+                my $sql = 'COMMIT TRANSACTION';
+                my $sth = $dbh->prepare( $sql ) || print LOG $dbh->errstr;
+                $sth->execute() || print LOG $sth->errstr . "\n";
+                $sth->finish();
+
+                return $available_port;
+            }
         }
-        return $available_port;
+
+        my $sql = 'ROLLBACK TRANSACTION';
+        my $sth = $dbh->prepare( $sql ) || print LOG $dbh->errstr;
+        $sth->execute() || print LOG $sth->errstr . "\n";
+        $sth->finish();
+
+        print LOG "No free available port found\n";
+        return undef;
     }
 
     sub handle_request {
@@ -244,7 +265,7 @@ END_SQL
                 
                 print LOG "auth cookie and app selection checks out ... launching session manager ...\n";
 
-                my $port = find_available_port();
+                my $port = find_available_port($auth_key);
 
                 if ( ! defined $port ) {
                     print LOG "Couldn't find a free port in range [$session_port_first..$session_port_last]\n";
@@ -263,17 +284,6 @@ END_SQL
                 
                 if ( $pid ) {
                     
-                    # We're the master. Update the users table with the port we just grabbed ...
-                    $sql = <<'END_SQL';
-                      update users
-                      set port = ?
-                      where auth_key = ?
-END_SQL
-                    $sth = $dbh->prepare( $sql )
-                        || print LOG $dbh->errstr;
-                    
-                    $sth->execute( $port , $auth_key )
-                        || print LOG $sth->errstr;
                     
                     sleep( 5 ); # wait for session manager to launch
                     
